@@ -12,6 +12,7 @@ class Markdown
 				msg = message.html
 			else
 				return message
+
 		# Support `text`
 		if _.isString message
 			msg = msg.replace(/(^|&gt;|[ >_*~])\`([^`\r\n]+)\`([<_*~]|\B|\b|$)/gm, '$1<span class="copyonly">`</span><span><code class="inline">$2</code></span><span class="copyonly">`</span>$3')
@@ -174,8 +175,9 @@ class Markdown
 	@tableRow: (content) ->
 		return '<tr>\n' + content + '</tr>\n'
 
-RocketChat.callbacks.add 'renderMessage', Markdown, RocketChat.callbacks.priority.HIGH
+
 RocketChat.Markdown = Markdown
+RocketChat.callbacks.add 'renderMessage', Markdown    , RocketChat.callbacks.priority.HIGH
 
 if Meteor.isClient
 	Blaze.registerHelper 'RocketChatMarkdown', (text) ->
