@@ -2745,6 +2745,17 @@ a.github-fork {
 			font-size: 1.5em;
 			line-height: 1em;
 		}
+
+		ul {
+			list-style: square;
+		}
+		li {
+			margin-left: 20px;
+			&.indent {
+				margin-top: -16px;
+				list-style: none;
+			}
+		}
 	}
 	&.temp .body {
 		opacity: .5;

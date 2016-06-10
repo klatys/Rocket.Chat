@@ -12,7 +12,6 @@ class Markdown
 				msg = message.html
 			else
 				return message
-
 		# Support `text`
 		if _.isString message
 			msg = msg.replace(/(^|&gt;|[ >_*~])\`([^`\r\n]+)\`([<_*~]|\B|\b|$)/gm, '$1<span class="copyonly">`</span><span><code class="inline">$2</code></span><span class="copyonly">`</span>$3')
@@ -36,7 +35,7 @@ class Markdown
 		msg = msg.replace(new RegExp("\\[([^\\]]+)\\]\\(((?:#{schemes}):\\/\\/[^\\)]+)\\)", 'gm'), '<a href="$2" target="_blank">$1</a>')
 
 		# Support <http://link|Text>
-		msg = msg.replace(new RegExp("(?:<|&lt;)((?:#{schemes}):\\/\\/[^\\|]+)\\|(.+?)(?=>|&gt;)(?:>|&gt;)", 'gm'), '<a href="$1" target="_blank">$2</a>')
+		#msg = msg.replace(new RegExp("(?:<|&lt;)((?:#{schemes}):\\/\\/[^\\|]+)\\|(.+?)(?=>|&gt;)(?:>|&gt;)", 'gm'), '<a href="$1" target="_blank">$2</a>')
 
 		if RocketChat.settings.get('Markdown_Headers')
 			# Support # Text for h1
@@ -59,6 +58,85 @@ class Markdown
 
 		# Support ~text~ to strike through text
 		msg = msg.replace(/(^|&gt;|[ >_*`])\~{1,2}([^~\r\n]+)\~{1,2}([<_*`]|\B|\b|$)/gm, '$1<span class="copyonly">~</span><strike>$2</strike><span class="copyonly">~</span>$3')
+
+		# Support [ ] and [x] for task list
+		msg = msg.replace(/\[(x| )\](?=\s)/igm, (match, checked) ->
+			return '<span class="copyonly">['+checked+'] </span><input type="checkbox" disabled ' + (if checked is ' ' then '' else 'checked ') + '/>'
+		)
+
+		#add table support
+		#Copyright (c) 2011-2014, Christopher Jeffrey (https://github.com/chjj/)
+		msg = msg.replace(/^ *\|(.+)\n *\|( *[-:]+[-| :]*)\n((?: *\|.*(?:\n|$))*)\n*/igm, (match) ->
+			matches = /^ *\|(.+)\n *\|( *[-:]+[-| :]*)\n((?: *\|.*(?:\n|$))*)\n*/.exec(match)
+
+			header = body = ""
+			
+			item =
+				type: 'table'
+				header: matches[1].replace(/^ *| *\| *$/g, '').split(RegExp(' *\\| *'))
+				align: matches[2].replace(/^ *|\| *$/g, '').split(RegExp(' *\\| *'))
+				cells: matches[3].replace(/(?: *\| *)?\n$/, '').split('\n')
+			i = 0
+			while i < item.align.length
+				if /^ *-+: *$/.test(item.align[i])
+					item.align[i] = 'right'
+				else if /^ *:-+: *$/.test(item.align[i])
+					item.align[i] = 'center'
+				else if /^ *:-+ *$/.test(item.align[i])
+					item.align[i] = 'left'
+				else
+					item.align[i] = null
+				i++
+			i = 0
+			while i < item.cells.length
+				item.cells[i] = item.cells[i].replace(/^ *\| *| *\| *$/g, '').split(RegExp(' *\\| *'))
+				i++
+			i = 0
+			while i < item.header.length
+				flags =
+					header: true
+					align: item.align[i]
+				cell += Markdown.tableCell(item.header[i],
+					header: true
+					align: item.align[i])
+				i++
+			header += Markdown.tableRow(cell)
+			i = 0
+			while i < item.cells.length
+				row = item.cells[i]
+				cell = ''
+				j = 0
+				while j < row.length
+					cell += Markdown.tableCell(row[j],
+						header: false
+						align: item.align[j])
+					j++
+				body += Markdown.tableRow(cell)
+				i++
+			Markdown.table header, body
+		)
+
+		#add list support
+		String::repeat = (num) ->
+			new Array(num + 1).join this
+
+		previousLevel = 0
+		msg = msg.replace(/^([\s{2}|\t]*?)[*|\-]\s(.*)/gm, (match, level, text) ->
+			actualLevel = 1
+			if level
+				spaceLevel = ((level.match(/\s{2}/g) or []).length) + 1
+				tabLevel = ((level.match(/\t/g) or []).length) + 1 
+				actualLevel = Math.max(spaceLevel, tabLevel, 1)
+
+			'<ul><li class="indent">'.repeat(actualLevel-1) + '<ul><li><span class="copyonly">'+level+'</span>' + text + '</li></ul>'.repeat(actualLevel)
+		)
+		msg = msg.replace(/<\/ul>\n<ul>/gm, '').replace(/<ul>/,'<ul style="list-style:square">')
+
+		#support for horizontal line
+		msg = msg.replace(/(\*\*\*|---|___)/igm, (match) ->
+			return '<span class="copyonly">['+match+'] </span><hr />'
+		)
+
 
 		# Support for block quote
 		# >>>
@@ -84,6 +162,17 @@ class Markdown
 		console.log 'Markdown', message if window?.rocketDebug
 
 		return message
+
+	@tableCell: (content, flags) ->
+		type = if flags.header then 'th' else 'td'
+		tag = if flags.align then '<' + type + ' style="text-align:' + flags.align + '">' else '<' + type + '>'
+		return tag + content + '</' + type + '>\n'
+
+	@table: (header, body) ->
+		return '<table>\n' + '<thead>\n' + header + '</thead>\n' + '<tbody>\n' + body + '</tbody>\n' + '</table>\n'
+
+	@tableRow: (content) ->
+		return '<tr>\n' + content + '</tr>\n'
 
 RocketChat.callbacks.add 'renderMessage', Markdown, RocketChat.callbacks.priority.HIGH
 RocketChat.Markdown = Markdown
